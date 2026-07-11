@@ -1,9 +1,11 @@
 use serde::Deserialize;
+use std::collections::HashMap;
 
 #[derive(Debug, Deserialize)]
 pub struct Frontmatter {
     pub name: Option<String>,
     pub description: Option<String>,
+    pub metadata: Option<HashMap<String, String>>,
 }
 
 pub struct ParsedSkillMd {
@@ -46,7 +48,8 @@ mod tests {
 
     #[test]
     fn parses_frontmatter_and_body() {
-        let content = "---\nname: test-skill\ndescription: A test skill\n---\n\n# Body\n\nSome content here.";
+        let content =
+            "---\nname: test-skill\ndescription: A test skill\n---\n\n# Body\n\nSome content here.";
         let parsed = parse_skill_md(content);
         let fm = parsed.frontmatter.unwrap();
         assert_eq!(fm.name.unwrap(), "test-skill");
@@ -70,5 +73,24 @@ mod tests {
         let fm = parsed.frontmatter.unwrap();
         assert_eq!(fm.name.unwrap(), "minimal");
         assert!(fm.description.is_none());
+    }
+
+    #[test]
+    fn parses_metadata_with_github_ref() {
+        let content = "---\nname: pinned-skill\ndescription: d\nmetadata:\n  github-repo: owner/repo\n  github-ref: v1.0.0\n  github-tree-sha: abc123\n---\n\nBody.";
+        let parsed = parse_skill_md(content);
+        let fm = parsed.frontmatter.unwrap();
+        let metadata = fm.metadata.unwrap();
+        assert_eq!(metadata.get("github-repo").unwrap(), "owner/repo");
+        assert_eq!(metadata.get("github-ref").unwrap(), "v1.0.0");
+        assert_eq!(metadata.get("github-tree-sha").unwrap(), "abc123");
+    }
+
+    #[test]
+    fn handles_missing_metadata() {
+        let content = "---\nname: unpinned\ndescription: d\n---\n\nBody.";
+        let parsed = parse_skill_md(content);
+        let fm = parsed.frontmatter.unwrap();
+        assert!(fm.metadata.is_none());
     }
 }

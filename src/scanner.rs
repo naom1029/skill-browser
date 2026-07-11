@@ -1,24 +1,6 @@
 use crate::model::{Scope, Skill, SourceType};
 use crate::parser::parse_skill_md;
-use serde::Deserialize;
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-
-#[derive(Debug, Deserialize)]
-struct InstalledPlugins {
-    #[allow(dead_code)]
-    version: u32,
-    plugins: HashMap<String, Vec<PluginInstallEntry>>,
-}
-
-#[derive(Debug, Deserialize)]
-struct PluginInstallEntry {
-    #[allow(dead_code)]
-    scope: String,
-    #[serde(rename = "installPath")]
-    install_path: String,
-    version: String,
-}
 
 pub struct ScanConfig {
     pub home_dir: PathBuf,
@@ -30,81 +12,45 @@ pub fn scan_skills(config: &ScanConfig) -> Vec<Skill> {
 
     // User scope
     let claude_skills = config.home_dir.join(".claude").join("skills");
-    skills.extend(scan_directory(&claude_skills, SourceType::GhSkill, Scope::User));
+    skills.extend(scan_directory(
+        &claude_skills,
+        SourceType::GhSkill,
+        Scope::User,
+    ));
 
     let agents_skills = config.home_dir.join(".agents").join("skills");
-    skills.extend(scan_directory(&agents_skills, SourceType::NpxSkills, Scope::User));
-
-    // Plugin skills (nested: ~/.claude/plugins/cache/**/skills/*/)
-    let plugin_cache = config.home_dir.join(".claude").join("plugins").join("cache");
-    scan_plugin_skills(&config.home_dir, &plugin_cache, &mut skills);
+    skills.extend(scan_directory(
+        &agents_skills,
+        SourceType::NpxSkills,
+        Scope::User,
+    ));
 
     // Project scope
     if let Some(ref project) = config.project_dir {
         let project_claude = project.join(".claude").join("skills");
-        skills.extend(scan_directory(&project_claude, SourceType::LocalOnly, Scope::Project));
+        skills.extend(scan_directory(
+            &project_claude,
+            SourceType::LocalOnly,
+            Scope::Project,
+        ));
 
         let project_agents = project.join(".agents").join("skills");
-        skills.extend(scan_directory(&project_agents, SourceType::LocalOnly, Scope::Project));
+        skills.extend(scan_directory(
+            &project_agents,
+            SourceType::LocalOnly,
+            Scope::Project,
+        ));
 
         let project_github = project.join(".github").join("skills");
-        skills.extend(scan_directory(&project_github, SourceType::LocalOnly, Scope::Project));
+        skills.extend(scan_directory(
+            &project_github,
+            SourceType::LocalOnly,
+            Scope::Project,
+        ));
     }
 
     skills.sort_by(|a, b| a.name.cmp(&b.name));
     skills
-}
-
-fn scan_plugin_skills(home_dir: &Path, cache_dir: &Path, skills: &mut Vec<Skill>) {
-    let installed_plugins_path = home_dir
-        .join(".claude")
-        .join("plugins")
-        .join("installed_plugins.json");
-
-    if let Ok(content) = std::fs::read_to_string(&installed_plugins_path)
-        && let Ok(installed) = serde_json::from_str::<InstalledPlugins>(&content)
-    {
-        scan_installed_plugin_skills(&installed, skills);
-        return;
-    }
-
-    scan_plugin_skills_recursive(cache_dir, skills);
-}
-
-fn scan_installed_plugin_skills(installed: &InstalledPlugins, skills: &mut Vec<Skill>) {
-    for entries in installed.plugins.values() {
-        for entry in entries {
-            let skills_dir = Path::new(&entry.install_path).join("skills");
-            if skills_dir.is_dir() {
-                let mut found =
-                    scan_directory(&skills_dir, SourceType::Plugin, Scope::User);
-                for skill in &mut found {
-                    skill.version = Some(entry.version.clone());
-                }
-                skills.extend(found);
-            }
-        }
-    }
-}
-
-fn scan_plugin_skills_recursive(cache_dir: &Path, skills: &mut Vec<Skill>) {
-    let Ok(marketplaces) = std::fs::read_dir(cache_dir) else { return };
-    for marketplace in marketplaces.flatten() {
-        let Ok(plugins) = std::fs::read_dir(marketplace.path()) else { continue };
-        for plugin in plugins.flatten() {
-            let Ok(versions) = std::fs::read_dir(plugin.path()) else { continue };
-            for version in versions.flatten() {
-                let skills_dir = version.path().join("skills");
-                if skills_dir.is_dir() {
-                    skills.extend(scan_directory(
-                        &skills_dir,
-                        SourceType::Plugin,
-                        Scope::User,
-                    ));
-                }
-            }
-        }
-    }
 }
 
 fn scan_directory(dir: &Path, source: SourceType, scope: Scope) -> Vec<Skill> {
@@ -143,6 +89,19 @@ fn scan_directory(dir: &Path, source: SourceType, scope: Scope) -> Vec<Skill> {
             .unwrap_or_default();
 
         let resources = collect_resources(&path);
+        let has_scripts = resources_have_scripts(&resources);
+
+        let metadata = parsed
+            .frontmatter
+            .as_ref()
+            .and_then(|fm| fm.metadata.clone());
+        let pinned = metadata
+            .as_ref()
+            .map(|m| m.contains_key("github-ref") || m.contains_key("github-tree-sha"))
+            .unwrap_or(false);
+        let version = metadata.as_ref().and_then(|m| m.get("github-ref").cloned());
+
+        let agents = agents_for(&source, &scope, &path);
 
         skills.push(Skill {
             name,
@@ -150,19 +109,60 @@ fn scan_directory(dir: &Path, source: SourceType, scope: Scope) -> Vec<Skill> {
             scope: scope.clone(),
             path: path.clone(),
             description,
-            agents: vec![],
-            version: None,
+            agents,
+            version,
             resources,
+            has_scripts,
+            pinned,
         });
     }
     skills.sort_by(|a, b| a.name.cmp(&b.name));
     skills
 }
 
+fn resources_have_scripts(resources: &[PathBuf]) -> bool {
+    resources.iter().any(|p| {
+        let is_non_md = p
+            .extension()
+            .map(|ext| !ext.eq_ignore_ascii_case("md"))
+            .unwrap_or(true);
+        let in_scripts_dir = p.components().any(|c| c.as_os_str() == "scripts");
+        is_non_md || in_scripts_dir
+    })
+}
+
+fn agents_for(source: &SourceType, scope: &Scope, path: &Path) -> Vec<String> {
+    match source {
+        SourceType::GhSkill => vec!["claude-code".to_string()],
+        SourceType::NpxSkills => vec![
+            "claude-code".to_string(),
+            "copilot".to_string(),
+            "codex".to_string(),
+        ],
+        SourceType::Plugin => vec!["claude-code".to_string()],
+        SourceType::LocalOnly => {
+            let _ = scope;
+            if path.components().any(|c| c.as_os_str() == ".claude") {
+                vec!["claude-code".to_string()]
+            } else if path.components().any(|c| c.as_os_str() == ".agents") {
+                vec![
+                    "claude-code".to_string(),
+                    "copilot".to_string(),
+                    "codex".to_string(),
+                ]
+            } else {
+                vec![]
+            }
+        }
+    }
+}
+
 fn collect_resources(skill_dir: &Path) -> Vec<PathBuf> {
     let mut resources = Vec::new();
     fn walk(dir: &Path, resources: &mut Vec<PathBuf>) {
-        let Ok(entries) = std::fs::read_dir(dir) else { return };
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_dir() {
@@ -187,8 +187,11 @@ mod tests {
         fs::create_dir_all(&skill_dir).unwrap();
         fs::write(
             skill_dir.join("SKILL.md"),
-            format!("---\nname: {name}\ndescription: {description}\n---\n\n# {name}\n\nBody content."),
-        ).unwrap();
+            format!(
+                "---\nname: {name}\ndescription: {description}\n---\n\n# {name}\n\nBody content."
+            ),
+        )
+        .unwrap();
     }
 
     #[test]
@@ -234,7 +237,8 @@ mod tests {
         fs::write(
             skill_dir.join("SKILL.md"),
             "---\nname: my-skill\ndescription: desc\n---\n\nBody",
-        ).unwrap();
+        )
+        .unwrap();
         fs::write(skill_dir.join("extra.md"), "extra content").unwrap();
         fs::write(skill_dir.join("script.sh"), "#!/bin/sh\necho hi").unwrap();
         let refs = skill_dir.join("references");
@@ -244,76 +248,77 @@ mod tests {
         let skills = scan_directory(tmp.path(), SourceType::GhSkill, Scope::User);
         assert_eq!(skills.len(), 1);
         assert_eq!(skills[0].resources.len(), 3); // extra.md + script.sh + references/ref1.md
+        assert!(skills[0].has_scripts);
     }
 
     #[test]
-    fn scan_plugin_skills_falls_back_to_recursive_walk_without_installed_plugins_json() {
+    fn detects_no_scripts_when_only_markdown() {
         let tmp = tempfile::tempdir().unwrap();
-        let home_dir = tmp.path();
-        let cache_dir = home_dir.join(".claude").join("plugins").join("cache");
-        let versioned_skills_dir = cache_dir
-            .join("marketplace")
-            .join("superpowers")
-            .join("6.1.1")
-            .join("skills");
-        create_test_skill(&versioned_skills_dir, "brainstorming", "Brainstorm");
+        let skill_dir = tmp.path().join("md-only-skill");
+        fs::create_dir_all(&skill_dir).unwrap();
+        fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: md-only-skill\ndescription: desc\n---\n\nBody",
+        )
+        .unwrap();
+        fs::write(skill_dir.join("extra.md"), "extra content").unwrap();
 
-        let mut skills = Vec::new();
-        scan_plugin_skills(home_dir, &cache_dir, &mut skills);
-
+        let skills = scan_directory(tmp.path(), SourceType::GhSkill, Scope::User);
         assert_eq!(skills.len(), 1);
-        assert_eq!(skills[0].name, "brainstorming");
-        assert_eq!(skills[0].version, None);
+        assert!(!skills[0].has_scripts);
     }
 
     #[test]
-    fn scan_plugin_skills_dedups_via_installed_plugins_json() {
+    fn detects_pinned_skill_from_metadata() {
         let tmp = tempfile::tempdir().unwrap();
-        let home_dir = tmp.path();
-        let cache_dir = home_dir.join(".claude").join("plugins").join("cache");
+        let skill_dir = tmp.path().join("pinned-skill");
+        fs::create_dir_all(&skill_dir).unwrap();
+        fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: pinned-skill\ndescription: desc\nmetadata:\n  github-repo: owner/repo\n  github-ref: v1.0.0\n  github-tree-sha: abc123\n---\n\nBody",
+        )
+        .unwrap();
 
-        // Two cached versions of the same plugin's skill.
-        let old_version_dir = cache_dir
-            .join("marketplace")
-            .join("superpowers")
-            .join("6.0.3")
-            .join("skills");
-        create_test_skill(&old_version_dir, "brainstorming", "Old brainstorm");
-
-        let new_version_dir = cache_dir
-            .join("marketplace")
-            .join("superpowers")
-            .join("6.1.1")
-            .join("skills");
-        create_test_skill(&new_version_dir, "brainstorming", "New brainstorm");
-
-        let plugins_dir = home_dir.join(".claude").join("plugins");
-        fs::create_dir_all(&plugins_dir).unwrap();
-        let install_path = new_version_dir
-            .parent()
-            .unwrap()
-            .to_string_lossy()
-            .to_string();
-        let installed_json = format!(
-            r#"{{
-  "version": 2,
-  "plugins": {{
-    "superpowers@marketplace": [{{
-      "scope": "user",
-      "installPath": "{install_path}",
-      "version": "6.1.1"
-    }}]
-  }}
-}}"#
-        );
-        fs::write(plugins_dir.join("installed_plugins.json"), installed_json).unwrap();
-
-        let mut skills = Vec::new();
-        scan_plugin_skills(home_dir, &cache_dir, &mut skills);
-
+        let skills = scan_directory(tmp.path(), SourceType::GhSkill, Scope::User);
         assert_eq!(skills.len(), 1);
-        assert_eq!(skills[0].name, "brainstorming");
-        assert_eq!(skills[0].description, "New brainstorm");
-        assert_eq!(skills[0].version, Some("6.1.1".to_string()));
+        assert!(skills[0].pinned);
+        assert_eq!(skills[0].version.as_deref(), Some("v1.0.0"));
+    }
+
+    #[test]
+    fn detects_unpinned_skill_without_metadata() {
+        let tmp = tempfile::tempdir().unwrap();
+        let skill_dir = tmp.path().join("unpinned-skill");
+        fs::create_dir_all(&skill_dir).unwrap();
+        fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: unpinned-skill\ndescription: desc\n---\n\nBody",
+        )
+        .unwrap();
+
+        let skills = scan_directory(tmp.path(), SourceType::GhSkill, Scope::User);
+        assert_eq!(skills.len(), 1);
+        assert!(!skills[0].pinned);
+    }
+
+    #[test]
+    fn assigns_claude_code_agent_for_gh_skill() {
+        let tmp = tempfile::tempdir().unwrap();
+        let skills_dir = tmp.path().join(".claude").join("skills");
+        create_test_skill(&skills_dir, "gh-agent-skill", "desc");
+
+        let skills = scan_directory(&skills_dir, SourceType::GhSkill, Scope::User);
+        assert_eq!(skills[0].agents, vec!["claude-code".to_string()]);
+    }
+
+    #[test]
+    fn assigns_multi_agent_for_npx_skills() {
+        let tmp = tempfile::tempdir().unwrap();
+        let skills_dir = tmp.path().join(".agents").join("skills");
+        create_test_skill(&skills_dir, "npx-agent-skill", "desc");
+
+        let skills = scan_directory(&skills_dir, SourceType::NpxSkills, Scope::User);
+        assert!(skills[0].agents.contains(&"claude-code".to_string()));
+        assert!(skills[0].agents.len() > 1);
     }
 }
