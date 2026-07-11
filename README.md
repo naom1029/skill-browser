@@ -1,35 +1,78 @@
 # skill-browser
 
-A skim-powered TUI for browsing, searching, and managing AI agent skills.
+A TUI for managing AI agent skills across multiple sources. Browse, search, install, update, and delete skills from one place.
+
+## Why?
+
+AI coding agents (Claude Code, Codex, Gemini CLI, etc.) use SKILL.md files to extend their capabilities. But skills are scattered across multiple directories and installed via different tools (`gh skill`, `npx skills`, manual placement). **skill-browser** gives you a single, unified view of everything — with fuzzy search, full-text grep, live preview, and one-key install/update/delete.
+
+## Demo
+
+```
+┌─ Skills ───────────────────────────┬─ Preview ──────────────────────────┐
+│ > brainstorming          gh  user  │ ── Description ─────────────────── │
+│   classical-testing      gh  proj  │ Turn ideas into fully formed       │
+│   codebase-map           gh  proj  │ designs and specs through natural  │
+│   freee-api-skill       npx  user  │ collaborative dialogue.            │
+│   investigate            gh  proj  │ ──────────────────────────────────  │
+│                                    │ Source: gh | Agents: claude-code   │
+│                                    │ Scripts: no | Pinned: no           │
+│                                    │                                    │
+│                                    │ # Brainstorming Ideas Into Designs │
+│                                    │ ...                                │
+├────────────────────────────────────┤                                    │
+│ Enter:files G:grep S:filter(all)   │                                    │
+│ N:install X:del R:update Esc:quit  │                                    │
+└────────────────────────────────────┴────────────────────────────────────┘
+```
 
 ## Features
 
-- **Unified view** — Scans `~/.claude/skills/`, `~/.agents/skills/`, plugin cache, and project-scoped directories in one list
-- **Fuzzy search** — Filter skills by name with skim's fuzzy matching
-- **Full-text grep** — `Ctrl-G` to search SKILL.md content with match highlighting in preview
-- **Live preview** — Description header + SKILL.md body in the preview pane
-- **File browser** — `Enter` to drill into a skill's files (SKILL.md, references, etc.), open in `$EDITOR`
-- **Install** — `Ctrl-N` to search and install skills from GitHub (`gh skill`) and skills.sh (`npx skills`)
-- **Delete** — `Ctrl-X` to remove skills with confirmation
-- **Source filter** — `Ctrl-S` to cycle through source types (gh / plugin / npx / local)
-- **Plugin dedup** — Reads `installed_plugins.json` to show only active plugin versions
+### Browse & Search
+- **Unified skill list** — Scans `~/.claude/skills/`, `~/.agents/skills/`, and project-scoped directories
+- **Fuzzy search** — Type to filter skills by name
+- **Full-text grep** (`Ctrl-G`) — Search inside SKILL.md content with match highlighting
+- **Source filter** (`Ctrl-S`) — Cycle through: all / gh / npx / local
+- **Live preview** — Description, metadata, and full SKILL.md body
+
+### Install & Manage
+- **Search & install** (`Ctrl-N`) — Search skills from GitHub and skills.sh, preview before installing
+- **Update** (`Ctrl-R`) — Update the selected skill via its backend
+- **Delete** (`Ctrl-X`) — Remove skills with confirmation prompt
+- **Scope selection** — Choose user or project scope when installing
+- **Multi-backend** — Installs via `gh skill` or `npx skills` depending on source
+
+### Security & Metadata
+- **Scripts detection** — Warns if a skill contains executable files (`.sh`, `.py`, etc.)
+- **Pinning status** — Shows whether a skill is pinned to a specific version
+- **Agent info** — Shows which agents the skill supports
+
+### File Browser
+- **Drill into skills** (`Enter`) — Browse SKILL.md, references, and supplementary files
+- **Open in editor** (`Enter`) — Launch `$EDITOR` on any file
 
 ## Install
 
+### Pre-built binaries
+
+Download from [Releases](https://github.com/naom1029/skill-browser/releases) (Linux, macOS).
+
 ### From source
+
+```sh
+cargo install --git https://github.com/naom1029/skill-browser
+```
+
+### From local checkout
 
 ```sh
 cargo install --path .
 ```
 
-### Pre-built binaries
-
-See [Releases](https://github.com/naom1029/skill-browser/releases).
-
 ## Usage
 
 ```sh
-skill-browser                        # browse skills in current project
+skill-browser                          # browse skills (project = cwd)
 skill-browser --project /path/to/repo  # specify project directory
 ```
 
@@ -37,26 +80,35 @@ skill-browser --project /path/to/repo  # specify project directory
 
 | Key | Action |
 |-----|--------|
-| `Enter` | Browse files (Level 2) |
+| Type | Fuzzy search by name |
+| `Enter` | Browse skill files |
 | `Ctrl-G` | Grep mode (full-text search) |
-| `Ctrl-N` | Install new skill |
+| `Ctrl-N` | Search & install new skill |
+| `Ctrl-R` | Update selected skill |
 | `Ctrl-S` | Cycle source filter |
-| `Ctrl-X` | Delete skill |
-| `Ctrl-D` | Preview page down |
-| `Ctrl-U` | Preview page up |
+| `Ctrl-X` | Delete selected skill |
+| `Ctrl-D` / `Ctrl-F` | Preview page down |
+| `Ctrl-U` / `Ctrl-B` | Preview page up |
 | `Esc` | Back / Quit |
 
-## Requirements
+## Scanned Directories
 
-- [skim](https://github.com/lotabout/skim) is bundled as a library (no external dependency)
-- `gh` CLI (optional, for install/search via `gh skill`)
-- `npx` (optional, for install/search via `npx skills`)
+| Directory | Source | Scope |
+|-----------|--------|-------|
+| `~/.claude/skills/` | gh | user |
+| `~/.agents/skills/` | npx | user |
+| `.claude/skills/` | local | project |
+| `.agents/skills/` | local | project |
+| `.github/skills/` | local | project |
 
-## Tech Stack
+## Optional Dependencies
 
-- Rust (edition 2024)
-- [skim](https://github.com/lotabout/skim) — fuzzy finder
-- Single binary, no runtime dependencies
+skill-browser is a single binary with no runtime dependencies. The following CLIs enable additional features:
+
+| Tool | Used for |
+|------|----------|
+| `gh` CLI | Install, update, search, preview via `gh skill` |
+| `npx` | Install, search via `npx skills` |
 
 ## License
 
