@@ -2,37 +2,37 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*.*.*'
-
-env:
-  CARGO_TERM_COLOR: always
+    branches: [main]
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
-  create-release:
-    name: Create Release
+  release-plz:
+    name: Release-plz
     runs-on: ubuntu-latest
     outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      tag: ${{ steps.release.outputs.tag }}
     steps:
       - uses: actions/checkout@v6
-
-      - name: Create Release
-        id: create_release
-        uses: softprops/action-gh-release@v2
         with:
-          draft: false
-          prerelease: false
-          generate_release_notes: true
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run release-plz
+        id: release
+        uses: release-plz/action@v0.5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-binaries:
     name: Build ${{ matrix.target }}
-    needs: create-release
+    needs: release-plz
+    if: needs.release-plz.outputs.tag != ''
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -56,6 +56,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.release-plz.outputs.tag }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -69,13 +71,13 @@ jobs:
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Strip binary (Unix)
-        if: matrix.os != 'windows-latest'
+      - name: Strip binary
         run: strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
 
-      - name: Upload binary
+      - name: Upload binary to release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.release-plz.outputs.tag }}
           files: target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
