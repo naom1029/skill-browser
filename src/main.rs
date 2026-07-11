@@ -1,21 +1,20 @@
 use clap::{Parser, Subcommand};
 use skill_browser::backend::backend_for_source;
-use skill_browser::model::SourceType;
-use skill_browser::preview::render_preview;
-use skill_browser::scanner::{scan_skills, ScanConfig};
 use skill_browser::backend::gh_skill::GhSkillBackend;
 use skill_browser::backend::npx_skills::NpxSkillsBackend;
 use skill_browser::backend::{SearchResult, SkillBackend};
+use skill_browser::model::SourceType;
+use skill_browser::preview::render_preview;
+use skill_browser::scanner::{ScanConfig, scan_skills};
 use skill_browser::ui::{
-    run_file_browser, run_grep_picker, run_install_picker, run_skill_picker, FileAction,
-    GrepResult, InstallSelection, PickerAction,
+    FileAction, GrepResult, InstallResult, InstallSelection, PickerAction, run_file_browser,
+    run_grep_picker, run_install_picker, run_skill_picker,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum SourceFilter {
     All,
     GhSkill,
-    Plugin,
     NpxSkills,
     LocalOnly,
 }
@@ -24,8 +23,7 @@ impl SourceFilter {
     fn next(self) -> Self {
         match self {
             SourceFilter::All => SourceFilter::GhSkill,
-            SourceFilter::GhSkill => SourceFilter::Plugin,
-            SourceFilter::Plugin => SourceFilter::NpxSkills,
+            SourceFilter::GhSkill => SourceFilter::NpxSkills,
             SourceFilter::NpxSkills => SourceFilter::LocalOnly,
             SourceFilter::LocalOnly => SourceFilter::All,
         }
@@ -35,7 +33,6 @@ impl SourceFilter {
         match self {
             SourceFilter::All => "all",
             SourceFilter::GhSkill => "gh",
-            SourceFilter::Plugin => "plugin",
             SourceFilter::NpxSkills => "npx",
             SourceFilter::LocalOnly => "local",
         }
@@ -45,7 +42,6 @@ impl SourceFilter {
         match self {
             SourceFilter::All => true,
             SourceFilter::GhSkill => matches!(source, SourceType::GhSkill),
-            SourceFilter::Plugin => matches!(source, SourceType::Plugin),
             SourceFilter::NpxSkills => matches!(source, SourceType::NpxSkills),
             SourceFilter::LocalOnly => matches!(source, SourceType::LocalOnly),
         }
@@ -77,14 +73,9 @@ enum Commands {
         project: Option<std::path::PathBuf>,
     },
     #[command(hide = true)]
-    Search {
-        query: String,
-    },
+    Search { query: String },
     #[command(hide = true)]
-    PreviewRemote {
-        repo: String,
-        skill: String,
-    },
+    PreviewRemote { repo: String, skill: String },
     #[command(hide = true)]
     PreviewByName {
         name: String,
@@ -103,9 +94,11 @@ fn main() {
         Some(Commands::Grep { query, project }) => run_grep(&query, project),
         Some(Commands::Search { query }) => run_search(&query),
         Some(Commands::PreviewRemote { repo, skill }) => run_preview_remote(&repo, &skill),
-        Some(Commands::PreviewByName { name, project, query }) => {
-            run_preview_by_name(&name, project, query.as_deref())
-        }
+        Some(Commands::PreviewByName {
+            name,
+            project,
+            query,
+        }) => run_preview_by_name(&name, project, query.as_deref()),
         None => run_picker(cli.project),
     }
 }
@@ -139,17 +132,15 @@ fn run_picker(project: Option<std::path::PathBuf>) {
             Some(PickerAction::BrowseFiles(idx)) => {
                 open_skill_files(&filtered, idx);
             }
-            Some(PickerAction::SwitchToGrep) => loop {
-                match run_grep_picker(&filtered, project_dir.as_deref(), None) {
-                    Some(GrepResult {
-                        action: PickerAction::BrowseFiles(idx),
-                        ..
-                    }) => {
-                        open_skill_files(&filtered, idx);
-                    }
-                    _ => break,
+            Some(PickerAction::SwitchToGrep) => {
+                while let Some(GrepResult {
+                    action: PickerAction::BrowseFiles(idx),
+                    ..
+                }) = run_grep_picker(&filtered, project_dir.as_deref(), None)
+                {
+                    open_skill_files(&filtered, idx);
                 }
-            },
+            }
             Some(PickerAction::CycleFilter) => {
                 filter = filter.next();
             }
@@ -174,22 +165,32 @@ fn run_picker(project: Option<std::path::PathBuf>) {
                 }
             }
             Some(PickerAction::Install) => {
-                let selection = run_install_picker();
-                clear_preview_cache();
-                if let Some(InstallSelection { repo, skill, source }) = selection {
-                    eprintln!("Installing {skill} from {repo} (via {source})...");
-                    let install_result = match source.as_str() {
-                        "npx" => NpxSkillsBackend.install(&repo, &skill),
-                        _ => GhSkillBackend.install(&repo, &skill),
-                    };
-                    match install_result {
-                        Ok(()) => {
-                            eprintln!("Installed: {skill}");
-                            skills = scan_skills(&config);
+                loop {
+                    match run_install_picker() {
+                        InstallResult::Selected(InstallSelection {
+                            repo,
+                            skill,
+                            source,
+                        }) => {
+                            eprintln!("Installing {skill} from {repo} (via {source})...");
+                            let install_result = match source.as_str() {
+                                "npx" => NpxSkillsBackend.install(&repo, &skill),
+                                _ => GhSkillBackend.install(&repo, &skill),
+                            };
+                            match install_result {
+                                Ok(()) => {
+                                    eprintln!("Installed: {skill}");
+                                    skills = scan_skills(&config);
+                                }
+                                Err(e) => eprintln!("Install failed: {e}"),
+                            }
+                            break;
                         }
-                        Err(e) => eprintln!("Install failed: {e}"),
+                        InstallResult::EmptyEnter => continue,
+                        InstallResult::Cancelled => break,
                     }
                 }
+                clear_preview_cache();
             }
             None => break,
         }
@@ -211,7 +212,7 @@ fn open_skill_files(skills: &[skill_browser::model::Skill], idx: usize) {
 }
 
 fn run_search(query: &str) {
-    if query.len() < 3 {
+    if query.trim().is_empty() {
         return;
     }
     std::thread::sleep(std::time::Duration::from_millis(500));
@@ -243,7 +244,10 @@ fn run_search(query: &str) {
 
     if let Ok(npx_results) = NpxSkillsBackend.search(query) {
         for r in npx_results {
-            if !results.iter().any(|(existing, _, _)| existing.name == r.name && existing.repo == r.repo) {
+            if !results
+                .iter()
+                .any(|(existing, _, _)| existing.name == r.name && existing.repo == r.repo)
+            {
                 let desc = r.description.clone();
                 results.push((r, "npx", None));
                 let _ = desc;
@@ -266,7 +270,10 @@ fn run_search(query: &str) {
             })
         })
         .collect();
-    let _ = std::fs::write(dir.join("results.json"), serde_json::to_string(&meta).unwrap_or_default());
+    let _ = std::fs::write(
+        dir.join("results.json"),
+        serde_json::to_string(&meta).unwrap_or_default(),
+    );
 
     for (r, source, stars) in &results {
         let stats = match (stars, r.description.contains("installs")) {
@@ -296,10 +303,10 @@ fn run_search(query: &str) {
             let output = std::process::Command::new("gh")
                 .args(["skill", "preview", &repo, &name])
                 .output();
-            if let Ok(out) = output {
-                if out.status.success() {
-                    let _ = std::fs::write(&cache_file, &out.stdout);
-                }
+            if let Ok(out) = output
+                && out.status.success()
+            {
+                let _ = std::fs::write(&cache_file, &out.stdout);
             }
             let _ = exe; // keep exe alive
         });
@@ -316,20 +323,30 @@ fn clear_preview_cache() {
 
 fn prefetch_nearby(dir: &std::path::Path, current_repo: &str, current_skill: &str) {
     let meta_file = dir.join("results.json");
-    let Ok(meta_str) = std::fs::read_to_string(&meta_file) else { return };
-    let Ok(items) = serde_json::from_str::<Vec<serde_json::Value>>(&meta_str) else { return };
+    let Ok(meta_str) = std::fs::read_to_string(&meta_file) else {
+        return;
+    };
+    let Ok(items) = serde_json::from_str::<Vec<serde_json::Value>>(&meta_str) else {
+        return;
+    };
 
     let Some(pos) = items.iter().position(|i| {
         i.get("repo").and_then(|v| v.as_str()) == Some(current_repo)
             && i.get("name").and_then(|v| v.as_str()) == Some(current_skill)
-    }) else { return };
+    }) else {
+        return;
+    };
 
     let start = pos.saturating_sub(5);
     let end = (pos + 6).min(items.len());
 
     for item in &items[start..end] {
-        let Some(repo) = item.get("repo").and_then(|v| v.as_str()) else { continue };
-        let Some(name) = item.get("name").and_then(|v| v.as_str()) else { continue };
+        let Some(repo) = item.get("repo").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        let Some(name) = item.get("name").and_then(|v| v.as_str()) else {
+            continue;
+        };
         let cache_key = format!("{}__{}", repo.replace('/', "_"), name);
         let cache_file = dir.join(&cache_key);
         if cache_file.exists() {
@@ -342,10 +359,10 @@ fn prefetch_nearby(dir: &std::path::Path, current_repo: &str, current_skill: &st
             let output = std::process::Command::new("gh")
                 .args(["skill", "preview", &repo, &name])
                 .output();
-            if let Ok(out) = output {
-                if out.status.success() {
-                    let _ = std::fs::write(&cache_file, &out.stdout);
-                }
+            if let Ok(out) = output
+                && out.status.success()
+            {
+                let _ = std::fs::write(&cache_file, &out.stdout);
             }
         });
     }
@@ -368,31 +385,33 @@ fn run_preview_remote(repo: &str, skill: &str) {
 
     // Cache miss → show description from metadata while fetching
     let meta_file = dir.join("results.json");
-    if let Ok(meta_str) = std::fs::read_to_string(&meta_file) {
-        if let Ok(items) = serde_json::from_str::<Vec<serde_json::Value>>(&meta_str) {
-            if let Some(item) = items.iter().find(|i| {
-                i.get("repo").and_then(|v| v.as_str()) == Some(repo)
-                    && i.get("name").and_then(|v| v.as_str()) == Some(skill)
-            }) {
-                let desc = item.get("description").and_then(|v| v.as_str()).unwrap_or("");
-                let source = item.get("source").and_then(|v| v.as_str()).unwrap_or("");
-                let stars = item.get("stars").and_then(|v| v.as_u64());
+    if let Ok(meta_str) = std::fs::read_to_string(&meta_file)
+        && let Ok(items) = serde_json::from_str::<Vec<serde_json::Value>>(&meta_str)
+        && let Some(item) = items.iter().find(|i| {
+            i.get("repo").and_then(|v| v.as_str()) == Some(repo)
+                && i.get("name").and_then(|v| v.as_str()) == Some(skill)
+        })
+    {
+        let desc = item
+            .get("description")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let source = item.get("source").and_then(|v| v.as_str()).unwrap_or("");
+        let stars = item.get("stars").and_then(|v| v.as_u64());
 
-                println!("── {repo}/{skill} ──");
-                println!();
-                if !desc.is_empty() {
-                    println!("{desc}");
-                    println!();
-                }
-                let mut info = format!("Source: [{source}]");
-                if let Some(s) = stars {
-                    info.push_str(&format!("  ★{s}"));
-                }
-                println!("{info}");
-                println!();
-                println!("Loading full SKILL.md...");
-            }
+        println!("── {repo}/{skill} ──");
+        println!();
+        if !desc.is_empty() {
+            println!("{desc}");
+            println!();
         }
+        let mut info = format!("Source: [{source}]");
+        if let Some(s) = stars {
+            info.push_str(&format!("  ★{s}"));
+        }
+        println!("{info}");
+        println!();
+        println!("Loading full SKILL.md...");
     }
 
     // Fetch (may already be in progress via prefetch, wait for it)
@@ -452,7 +471,10 @@ fn run_grep(query: &str, project: Option<std::path::PathBuf>) {
 fn run_preview_by_name(name: &str, project: Option<std::path::PathBuf>, query: Option<&str>) {
     let home_dir = dirs::home_dir().expect("cannot determine home directory");
     let project_dir = project.or_else(|| std::env::current_dir().ok());
-    let config = ScanConfig { home_dir, project_dir };
+    let config = ScanConfig {
+        home_dir,
+        project_dir,
+    };
     let skills = scan_skills(&config);
 
     let skill_name = name.replace('…', "");

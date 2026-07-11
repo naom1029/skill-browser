@@ -77,7 +77,9 @@ fn parse_npx_find_output(output: &str) -> Vec<SearchResult> {
         }
         // Format: "owner/repo@skill-name  N installs"
         let parts: Vec<&str> = trimmed.splitn(2, ' ').collect();
-        let Some(full_name) = parts.first() else { continue };
+        let Some(full_name) = parts.first() else {
+            continue;
+        };
         if !full_name.contains('@') {
             continue;
         }

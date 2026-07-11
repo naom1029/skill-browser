@@ -1,9 +1,9 @@
 use crate::model::Skill;
 use skim::prelude::*;
-use tuikit::prelude::Key;
 use std::io::Cursor;
 use std::path::Path;
-use terminal_size::{terminal_size, Width};
+use terminal_size::{Width, terminal_size};
+use tuikit::prelude::Key;
 
 pub enum PickerAction {
     BrowseFiles(usize),
@@ -56,9 +56,8 @@ pub fn run_skill_picker(
         preview_cmd.push_str(&format!(" --project {}", shell_quote(dir)));
     }
 
-    let header = format!(
-        "Enter:files | Ctrl-G:grep | Ctrl-S:filter({filter_label}) | Ctrl-N:install | Ctrl-X:delete | Ctrl-D/U:scroll | Esc:quit"
-    );
+    let header =
+        format!("Enter:files G:grep S:filter({filter_label}) N:install X:del D/U:scroll Esc:quit");
 
     let options = SkimOptionsBuilder::default()
         .height(Some("100%"))
@@ -180,8 +179,16 @@ pub struct InstallSelection {
     pub source: String,
 }
 
-pub fn run_install_picker() -> Option<InstallSelection> {
-    let current_exe = std::env::current_exe().ok()?;
+pub enum InstallResult {
+    Selected(InstallSelection),
+    EmptyEnter,
+    Cancelled,
+}
+
+pub fn run_install_picker() -> InstallResult {
+    let Some(current_exe) = std::env::current_exe().ok() else {
+        return InstallResult::Cancelled;
+    };
 
     let search_cmd = format!("{} search {{}}", shell_quote(&current_exe));
 
@@ -194,25 +201,32 @@ pub fn run_install_picker() -> Option<InstallSelection> {
         .height(Some("100%"))
         .preview(Some(&preview_cmd))
         .preview_window(Some("right:60%:wrap"))
-        .header(Some("search> type to search (3+ chars, 500ms debounce) | Enter:install | Ctrl-D/U:scroll | Esc:back"))
+        .header(Some(
+            "search> type to search | Enter:install | D/U:scroll | Esc:back",
+        ))
         .multi(false)
         .prompt(Some("search> "))
         .cmd(Some(&search_cmd))
         .interactive(true)
-        .bind(vec![
-            "ctrl-d:preview-page-down",
-            "ctrl-u:preview-page-up",
-        ])
-        .build()
-        .ok()?;
+        .bind(vec!["ctrl-d:preview-page-down", "ctrl-u:preview-page-up"])
+        .build();
 
-    let output = Skim::run_with(&options, None)?;
+    let Some(options) = options.ok() else {
+        return InstallResult::Cancelled;
+    };
+
+    let Some(output) = Skim::run_with(&options, None) else {
+        return InstallResult::Cancelled;
+    };
 
     if output.is_abort {
-        return None;
+        return InstallResult::Cancelled;
     }
 
-    let selected = output.selected_items.first()?;
+    let Some(selected) = output.selected_items.first() else {
+        return InstallResult::EmptyEnter;
+    };
+
     let text = selected.output().to_string();
     let full_path = text.split_whitespace().next().unwrap_or("").trim();
     let source = if text.contains("[npx]") {
@@ -221,11 +235,17 @@ pub fn run_install_picker() -> Option<InstallSelection> {
         "gh".to_string()
     };
 
-    let last_slash = full_path.rfind('/')?;
+    let Some(last_slash) = full_path.rfind('/') else {
+        return InstallResult::EmptyEnter;
+    };
     let repo = full_path[..last_slash].to_string();
     let skill = full_path[last_slash + 1..].to_string();
 
-    Some(InstallSelection { repo, skill, source })
+    InstallResult::Selected(InstallSelection {
+        repo,
+        skill,
+        source,
+    })
 }
 
 pub fn run_file_browser(skill: &Skill) -> Option<FileAction> {

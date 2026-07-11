@@ -34,7 +34,12 @@ impl GhSkillBackend {
 
 impl GhSkillBackend {
     pub fn search_raw(&self, query: &str) -> BackendResult<String> {
-        self.run_gh(&["search", query, "--json", "skillName,repo,description,stars"])
+        self.run_gh(&[
+            "search",
+            query,
+            "--json",
+            "skillName,repo,description,stars",
+        ])
     }
 }
 
