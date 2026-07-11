@@ -44,6 +44,8 @@ pub struct Skill {
     pub agents: Vec<String>,
     pub version: Option<String>,
     pub resources: Vec<PathBuf>,
+    pub has_scripts: bool,
+    pub pinned: bool,
 }
 
 pub const TAG_WIDTH: usize = 12;
@@ -94,6 +96,8 @@ mod tests {
             agents: vec![],
             version: None,
             resources: vec![],
+            has_scripts: false,
+            pinned: false,
         };
         let line = skill.display_line();
         assert!(line.contains("brainstorming"));
@@ -114,6 +118,8 @@ mod tests {
             agents: vec![],
             version: None,
             resources: vec![],
+            has_scripts: false,
+            pinned: false,
         };
         let line = skill.display_line();
         assert!(line.contains("…"));
@@ -131,6 +137,8 @@ mod tests {
             agents: vec![],
             version: None,
             resources: vec![],
+            has_scripts: false,
+            pinned: false,
         };
         let long = Skill {
             name: "a-very-long-skill-name-that-exceeds-the-max".to_string(),
@@ -141,6 +149,8 @@ mod tests {
             agents: vec![],
             version: None,
             resources: vec![],
+            has_scripts: false,
+            pinned: false,
         };
         assert_eq!(
             display_width(&short.display_line()),
