@@ -13,9 +13,29 @@ use skill_browser::ui::{
 };
 
 #[derive(Parser)]
-#[command(name = "skill-browser", about = "TUI for browsing agent skills")]
+#[command(
+    name = "skill-browser",
+    version,
+    about = "A TUI for browsing, searching, and managing AI agent skills",
+    long_about = "Browse installed skills with fuzzy search, full-text grep, live preview,\n\
+                  and one-key install/update/delete. Supports gh skill and npx skills backends.\n\n\
+                  Keybindings:\n  \
+                  Enter    Browse skill files\n  \
+                  Ctrl-G   Grep mode (full-text search)\n  \
+                  Ctrl-N   Search & install new skill\n  \
+                  Ctrl-R   Update selected skill\n  \
+                  Ctrl-A   Cycle agent filter\n  \
+                  Ctrl-S   Cycle scope filter\n  \
+                  Ctrl-X   Delete selected skill\n  \
+                  Ctrl-D/U Preview scroll\n  \
+                  Esc      Back / Quit"
+)]
 struct Cli {
-    #[arg(long, help = "Project directory to scan for project-scoped skills")]
+    #[arg(
+        long,
+        short,
+        help = "Project directory to scan for project-scoped skills"
+    )]
     project: Option<std::path::PathBuf>,
 
     #[command(subcommand)]
