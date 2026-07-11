@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  lint:
+    name: Lint & Auto-fix
+    runs-on: ubuntu-latest
+    outputs:
+      auto_fixed: ${{ steps.auto-commit.outputs.changes_detected }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-lint-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Run rustfmt (auto-fix)
+        run: cargo fmt --all
+
+      - name: Run clippy --fix (auto-fix)
+        run: cargo clippy --fix --all-targets --all-features --allow-dirty --allow-staged
+
+      - name: Check formatting (verify)
+        run: cargo fmt --all -- --check
+
+      - name: Check clippy (verify)
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Commit auto-fixes
+        id: auto-commit
+        uses: stefanzweifel/git-auto-commit-action@v7
+        with:
+          commit_message: "style: auto-fix formatting and clippy warnings"
+          commit_user_name: github-actions[bot]
+          commit_user_email: github-actions[bot]@users.noreply.github.com
+
+  test:
+    name: Test
+    needs: lint
+    if: needs.lint.outputs.auto_fixed != 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        rust: [stable, beta]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+
+      - name: Cache cargo
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-${{ matrix.rust }}-cargo-test-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Run tests
+        run: cargo test --verbose
+
+  build:
+    name: Build
+    needs: lint
+    if: needs.lint.outputs.auto_fixed != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build
+        run: cargo build --release --verbose
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: skill-browser-linux-amd64
+          path: target/release/skill-browser
