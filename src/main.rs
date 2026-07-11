@@ -3,50 +3,14 @@ use skill_browser::backend::backend_for_source;
 use skill_browser::backend::gh_skill::GhSkillBackend;
 use skill_browser::backend::npx_skills::NpxSkillsBackend;
 use skill_browser::backend::{SearchResult, SkillBackend};
-use skill_browser::model::SourceType;
+use skill_browser::filter::SourceFilter;
+use skill_browser::highlight::highlight_matches;
 use skill_browser::preview::render_preview;
 use skill_browser::scanner::{ScanConfig, scan_skills};
 use skill_browser::ui::{
     FileAction, GrepResult, InstallResult, InstallSelection, PickerAction, run_file_browser,
     run_grep_picker, run_install_picker, run_skill_picker,
 };
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum SourceFilter {
-    All,
-    GhSkill,
-    NpxSkills,
-    LocalOnly,
-}
-
-impl SourceFilter {
-    fn next(self) -> Self {
-        match self {
-            SourceFilter::All => SourceFilter::GhSkill,
-            SourceFilter::GhSkill => SourceFilter::NpxSkills,
-            SourceFilter::NpxSkills => SourceFilter::LocalOnly,
-            SourceFilter::LocalOnly => SourceFilter::All,
-        }
-    }
-
-    fn label(self) -> &'static str {
-        match self {
-            SourceFilter::All => "all",
-            SourceFilter::GhSkill => "gh",
-            SourceFilter::NpxSkills => "npx",
-            SourceFilter::LocalOnly => "local",
-        }
-    }
-
-    fn matches(self, source: &SourceType) -> bool {
-        match self {
-            SourceFilter::All => true,
-            SourceFilter::GhSkill => matches!(source, SourceType::GhSkill),
-            SourceFilter::NpxSkills => matches!(source, SourceType::NpxSkills),
-            SourceFilter::LocalOnly => matches!(source, SourceType::LocalOnly),
-        }
-    }
-}
 
 #[derive(Parser)]
 #[command(name = "skill-browser", about = "TUI for browsing agent skills")]
@@ -485,30 +449,6 @@ fn run_preview_by_name(name: &str, project: Option<std::path::PathBuf>, query: O
             _ => print!("{}", preview),
         }
     }
-}
-
-fn highlight_matches(text: &str, query: &str) -> String {
-    let query_lower = query.to_lowercase();
-    let mut result = String::with_capacity(text.len());
-    for line in text.lines() {
-        let line_lower = line.to_lowercase();
-        if let Some(pos) = line_lower.find(&query_lower) {
-            let end = pos + query.len();
-            if end <= line.len() {
-                result.push_str(&line[..pos]);
-                result.push_str("\x1b[1;33m");
-                result.push_str(&line[pos..end]);
-                result.push_str("\x1b[0m");
-                result.push_str(&line[end..]);
-            } else {
-                result.push_str(line);
-            }
-        } else {
-            result.push_str(line);
-        }
-        result.push('\n');
-    }
-    result
 }
 
 fn run_preview(index: usize, project: Option<std::path::PathBuf>) {

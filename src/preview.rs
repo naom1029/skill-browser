@@ -47,6 +47,7 @@ pub fn render_preview(skill: &Skill) -> String {
 }
 
 #[cfg(test)]
+#[allow(non_snake_case)]
 mod tests {
     use super::*;
     use crate::model::{Scope, SourceType};
@@ -111,6 +112,93 @@ mod tests {
 
         let preview = render_preview(&skill);
         assert!(preview.contains("1 file"));
+    }
+
+    #[test]
+    fn スクリプトなしピン留めなしの場合メタ行にnoが表示される() {
+        let tmp = tempfile::tempdir().unwrap();
+        let skill_dir = tmp.path().join("s");
+        fs::create_dir_all(&skill_dir).unwrap();
+        fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: s\ndescription: d\n---\n\nb",
+        )
+        .unwrap();
+
+        let skill = Skill {
+            name: "s".to_string(),
+            source: SourceType::GhSkill,
+            scope: Scope::User,
+            path: skill_dir,
+            description: "d".to_string(),
+            agents: vec![],
+            version: None,
+            resources: vec![],
+            has_scripts: false,
+            pinned: false,
+        };
+
+        let preview = render_preview(&skill);
+        assert!(preview.contains("Scripts: no"));
+        assert!(preview.contains("Pinned: no"));
+        assert!(preview.contains("Agents: unknown"));
+    }
+
+    #[test]
+    fn ピン留めありバージョンなしの場合yesのみ表示される() {
+        let tmp = tempfile::tempdir().unwrap();
+        let skill_dir = tmp.path().join("s");
+        fs::create_dir_all(&skill_dir).unwrap();
+        fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: s\ndescription: d\n---\n\nb",
+        )
+        .unwrap();
+
+        let skill = Skill {
+            name: "s".to_string(),
+            source: SourceType::GhSkill,
+            scope: Scope::User,
+            path: skill_dir,
+            description: "d".to_string(),
+            agents: vec![],
+            version: None,
+            resources: vec![],
+            has_scripts: false,
+            pinned: true,
+        };
+
+        let preview = render_preview(&skill);
+        assert!(preview.contains("Pinned: yes"));
+        assert!(!preview.contains("Pinned: yes ("));
+    }
+
+    #[test]
+    fn 複数エージェントがカンマ区切りで表示される() {
+        let tmp = tempfile::tempdir().unwrap();
+        let skill_dir = tmp.path().join("s");
+        fs::create_dir_all(&skill_dir).unwrap();
+        fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: s\ndescription: d\n---\n\nb",
+        )
+        .unwrap();
+
+        let skill = Skill {
+            name: "s".to_string(),
+            source: SourceType::NpxSkills,
+            scope: Scope::User,
+            path: skill_dir,
+            description: "d".to_string(),
+            agents: vec!["claude-code".to_string(), "codex".to_string()],
+            version: None,
+            resources: vec![],
+            has_scripts: false,
+            pinned: false,
+        };
+
+        let preview = render_preview(&skill);
+        assert!(preview.contains("Agents: claude-code, codex"));
     }
 
     #[test]
