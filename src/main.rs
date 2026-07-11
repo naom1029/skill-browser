@@ -128,6 +128,16 @@ fn run_picker(project: Option<std::path::PathBuf>) {
                     }
                 }
             }
+            Some(PickerAction::Update(idx)) => {
+                if let Some(skill) = filtered.get(idx) {
+                    let backend = backend_for_source(&skill.source);
+                    match backend.update(&skill.name) {
+                        Ok(()) => eprintln!("Updated skill: {}", skill.name),
+                        Err(e) => eprintln!("Failed to update skill {}: {e}", skill.name),
+                    }
+                    skills = scan_skills(&config);
+                }
+            }
             Some(PickerAction::Install) => {
                 loop {
                     match run_install_picker() {

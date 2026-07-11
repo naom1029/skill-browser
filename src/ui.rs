@@ -11,6 +11,7 @@ pub enum PickerAction {
     CycleFilter,
     Delete(usize),
     Install,
+    Update(usize),
 }
 
 pub struct GrepResult {
@@ -56,8 +57,9 @@ pub fn run_skill_picker(
         preview_cmd.push_str(&format!(" --project {}", shell_quote(dir)));
     }
 
-    let header =
-        format!("Enter:files G:grep S:filter({filter_label}) N:install X:del D/U:scroll Esc:quit");
+    let header = format!(
+        "Enter:files G:grep S:filter({filter_label}) N:install X:del R:update D/U:scroll Esc:quit"
+    );
 
     let options = SkimOptionsBuilder::default()
         .height(Some("100%"))
@@ -66,7 +68,7 @@ pub fn run_skill_picker(
         .header(Some(&header))
         .multi(false)
         .delimiter(Some("\t"))
-        .expect(Some("ctrl-g,ctrl-s,ctrl-x,ctrl-n".to_owned()))
+        .expect(Some("ctrl-g,ctrl-s,ctrl-x,ctrl-n,ctrl-r".to_owned()))
         .bind(vec![
             "ctrl-d:preview-page-down",
             "ctrl-u:preview-page-up",
@@ -102,6 +104,13 @@ pub fn run_skill_picker(
         let text = selected.output().to_string();
         let idx: usize = text.split('\t').next()?.parse().ok()?;
         return Some(PickerAction::Delete(idx));
+    }
+
+    if output.final_key == Key::Ctrl('r') {
+        let selected = output.selected_items.first()?;
+        let text = selected.output().to_string();
+        let idx: usize = text.split('\t').next()?.parse().ok()?;
+        return Some(PickerAction::Update(idx));
     }
 
     if output.is_abort {
