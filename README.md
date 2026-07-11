@@ -55,17 +55,25 @@ AI coding agents (Claude Code, Codex, Gemini CLI, etc.) use SKILL.md files to ex
 
 ### Pre-built binaries
 
-Download from [Releases](https://github.com/naom1029/skill-browser/releases) (Linux, macOS).
+Download from [Releases](https://github.com/naom1029/skill-browser/releases):
+
+```sh
+# Linux (amd64)
+curl -L https://github.com/naom1029/skill-browser/releases/latest/download/skill-browser-linux-amd64 -o skill-browser
+chmod +x skill-browser
+sudo mv skill-browser /usr/local/bin/
+
+# macOS (Apple Silicon)
+curl -L https://github.com/naom1029/skill-browser/releases/latest/download/skill-browser-macos-arm64 -o skill-browser
+chmod +x skill-browser
+sudo mv skill-browser /usr/local/bin/
+```
 
 ### From source
 
 ```sh
-cargo install --git https://github.com/naom1029/skill-browser
-```
-
-### From local checkout
-
-```sh
+git clone https://github.com/naom1029/skill-browser.git
+cd skill-browser
 cargo install --path .
 ```
 
@@ -103,12 +111,14 @@ skill-browser --project /path/to/repo  # specify project directory
 
 ## Optional Dependencies
 
-skill-browser is a single binary with no runtime dependencies. The following CLIs enable additional features:
+skill-browser works standalone — browse, search, grep, and preview all work without any external tool. The following CLIs unlock additional features:
 
-| Tool | Used for |
-|------|----------|
-| `gh` CLI | Install, update, search, preview via `gh skill` |
+| Tool | Enables |
+|------|---------|
+| `gh` CLI | Install, update, search, remote preview via `gh skill` |
 | `npx` | Install, search via `npx skills` |
+
+Without `gh` or `npx`, skill-browser still provides full read-only access to all locally installed skills.
 
 ## License
 
