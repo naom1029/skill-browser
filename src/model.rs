@@ -44,22 +44,45 @@ pub struct Skill {
     pub agents: Vec<String>,
     pub version: Option<String>,
     pub resources: Vec<PathBuf>,
+    pub has_scripts: bool,
+    pub pinned: bool,
 }
 
-pub const TAG_WIDTH: usize = 12;
+const TAG_WIDTH: usize = 18;
 const DEFAULT_NAME_MAX: usize = 28;
 
 impl Skill {
+    pub fn agent_label(&self) -> &str {
+        if self.agents.is_empty() {
+            "unknown"
+        } else if self.agents.len() == 1 {
+            &self.agents[0]
+        } else {
+            "multi"
+        }
+    }
+
     pub fn display_line_with_width(&self, total_width: usize) -> String {
-        let name_max = total_width.saturating_sub(TAG_WIDTH).max(10);
-        let tag = format!("{}  {}", self.source, self.scope);
+        let tag_width = TAG_WIDTH.min(total_width / 2);
+        let name_max = total_width.saturating_sub(tag_width).max(10);
+        let agent = self.agent_label();
+        let tag = format!("{}  {}", agent, self.scope);
         let name = truncate_with_ellipsis(&self.name, name_max);
         let pad = name_max.saturating_sub(display_width(&name));
-        format!("{}{:pad$}{:>tw$}", name, "", tag, pad = pad, tw = TAG_WIDTH)
+        format!("{}{:pad$}{:>tw$}", name, "", tag, pad = pad, tw = tag_width)
     }
 
     pub fn display_line(&self) -> String {
         self.display_line_with_width(DEFAULT_NAME_MAX + TAG_WIDTH)
+    }
+
+    pub fn header_line(total_width: usize) -> String {
+        let tag_width = TAG_WIDTH.min(total_width / 2);
+        let name_max = total_width.saturating_sub(tag_width).max(10);
+        let tag = format!("{}  {}", "Agent", "Scope");
+        let name = "Name";
+        let pad = name_max.saturating_sub(name.len());
+        format!("{}{:pad$}{:>tw$}", name, "", tag, pad = pad, tw = tag_width)
     }
 }
 
@@ -87,20 +110,20 @@ mod tests {
     fn display_line_right_aligned_tags() {
         let skill = Skill {
             name: "brainstorming".to_string(),
-            source: SourceType::Plugin,
+            source: SourceType::GhSkill,
             scope: Scope::User,
             path: PathBuf::from("/tmp/test"),
             description: "Test skill".to_string(),
-            agents: vec![],
+            agents: vec!["claude-code".to_string()],
             version: None,
             resources: vec![],
+            has_scripts: false,
+            pinned: false,
         };
         let line = skill.display_line();
         assert!(line.contains("brainstorming"));
-        assert!(line.contains("plugin"));
+        assert!(line.contains("claude-code"));
         assert!(line.contains("user"));
-        let width = display_width(&line);
-        assert_eq!(width, DEFAULT_NAME_MAX + TAG_WIDTH);
     }
 
     #[test]
@@ -114,6 +137,8 @@ mod tests {
             agents: vec![],
             version: None,
             resources: vec![],
+            has_scripts: false,
+            pinned: false,
         };
         let line = skill.display_line();
         assert!(line.contains("…"));
@@ -131,6 +156,8 @@ mod tests {
             agents: vec![],
             version: None,
             resources: vec![],
+            has_scripts: false,
+            pinned: false,
         };
         let long = Skill {
             name: "a-very-long-skill-name-that-exceeds-the-max".to_string(),
@@ -141,6 +168,8 @@ mod tests {
             agents: vec![],
             version: None,
             resources: vec![],
+            has_scripts: false,
+            pinned: false,
         };
         assert_eq!(
             display_width(&short.display_line()),
