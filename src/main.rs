@@ -418,7 +418,20 @@ fn run_preview_remote(repo: &str, skill: &str) {
         }
         println!("{info}");
         println!();
-        println!("Loading full SKILL.md...");
+    }
+
+    // Fetch full preview (skim kills this process on cursor move)
+    let output = std::process::Command::new("gh")
+        .args(["skill", "preview", repo, skill])
+        .output();
+
+    if let Ok(out) = output {
+        if out.status.success() {
+            let content = String::from_utf8_lossy(&out.stdout);
+            let _ = std::fs::write(&cache_file, content.as_bytes());
+            println!();
+            print!("{content}");
+        }
     }
 }
 
