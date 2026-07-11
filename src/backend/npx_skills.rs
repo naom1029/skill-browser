@@ -29,8 +29,18 @@ impl SkillBackend for NpxSkillsBackend {
         "npx skills"
     }
 
-    fn install(&self, source: &str, skill_name: &str) -> BackendResult<()> {
-        self.run_npx(&["add", source, "--skill", skill_name, "-a", "claude-code"])?;
+    fn install(
+        &self,
+        source: &str,
+        skill_name: &str,
+        scope: &str,
+        agent: &str,
+    ) -> BackendResult<()> {
+        let mut args = vec!["add", source, "--skill", skill_name, "-a", agent];
+        if scope == "user" {
+            args.push("-g");
+        }
+        self.run_npx(&args)?;
         Ok(())
     }
 
@@ -77,7 +87,9 @@ fn parse_npx_find_output(output: &str) -> Vec<SearchResult> {
         }
         // Format: "owner/repo@skill-name  N installs"
         let parts: Vec<&str> = trimmed.splitn(2, ' ').collect();
-        let Some(full_name) = parts.first() else { continue };
+        let Some(full_name) = parts.first() else {
+            continue;
+        };
         if !full_name.contains('@') {
             continue;
         }
