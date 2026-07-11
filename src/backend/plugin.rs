@@ -30,7 +30,13 @@ impl SkillBackend for PluginBackend {
         "claude plugin"
     }
 
-    fn install(&self, source: &str, _skill_name: &str) -> BackendResult<()> {
+    fn install(
+        &self,
+        source: &str,
+        _skill_name: &str,
+        _scope: &str,
+        _agent: &str,
+    ) -> BackendResult<()> {
         self.run_claude_plugin(&["install", source])?;
         Ok(())
     }

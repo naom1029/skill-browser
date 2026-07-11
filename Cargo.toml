@@ -1,7 +1,10 @@
 [package]
 name = "skill-browser"
-version = "0.1.0"
+version = "0.3.0"
 edition = "2024"
+description = "A TUI for browsing, searching, and managing AI agent skills"
+license = "MIT"
+repository = "https://github.com/naom1029/skill-browser"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }

@@ -7,7 +7,13 @@ impl SkillBackend for ManualBackend {
         "manual"
     }
 
-    fn install(&self, _source: &str, _skill_name: &str) -> BackendResult<()> {
+    fn install(
+        &self,
+        _source: &str,
+        _skill_name: &str,
+        _scope: &str,
+        _agent: &str,
+    ) -> BackendResult<()> {
         Err(BackendError {
             message: "Manual skills cannot be installed via CLI".to_string(),
         })
