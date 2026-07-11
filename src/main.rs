@@ -135,11 +135,15 @@ fn run_picker(project: Option<std::path::PathBuf>) {
                             repo,
                             skill,
                             source,
+                            scope,
+                            agent,
                         }) => {
-                            eprintln!("Installing {skill} from {repo} (via {source})...");
+                            eprintln!(
+                                "Installing {skill} from {repo} (via {source}, scope={scope}, agent={agent})..."
+                            );
                             let install_result = match source.as_str() {
-                                "npx" => NpxSkillsBackend.install(&repo, &skill),
-                                _ => GhSkillBackend.install(&repo, &skill),
+                                "npx" => NpxSkillsBackend.install(&repo, &skill, &scope, &agent),
+                                _ => GhSkillBackend.install(&repo, &skill, &scope, &agent),
                             };
                             match install_result {
                                 Ok(()) => {

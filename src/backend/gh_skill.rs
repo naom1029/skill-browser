@@ -48,8 +48,16 @@ impl SkillBackend for GhSkillBackend {
         "gh skill"
     }
 
-    fn install(&self, source: &str, skill_name: &str) -> BackendResult<()> {
-        self.run_gh(&["install", source, skill_name, "--agent", "claude-code"])?;
+    fn install(
+        &self,
+        source: &str,
+        skill_name: &str,
+        scope: &str,
+        agent: &str,
+    ) -> BackendResult<()> {
+        self.run_gh(&[
+            "install", source, skill_name, "--scope", scope, "--agent", agent,
+        ])?;
         Ok(())
     }
 

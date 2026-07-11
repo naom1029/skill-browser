@@ -35,7 +35,13 @@ impl SearchResult {
 
 pub trait SkillBackend {
     fn name(&self) -> &str;
-    fn install(&self, source: &str, skill_name: &str) -> BackendResult<()>;
+    fn install(
+        &self,
+        source: &str,
+        skill_name: &str,
+        scope: &str,
+        agent: &str,
+    ) -> BackendResult<()>;
     fn update(&self, skill_name: &str) -> BackendResult<()>;
     fn uninstall(&self, skill_name: &str) -> BackendResult<()>;
     fn search(&self, query: &str) -> BackendResult<Vec<SearchResult>>;

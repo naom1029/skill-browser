@@ -177,6 +177,8 @@ pub struct InstallSelection {
     pub repo: String,
     pub skill: String,
     pub source: String,
+    pub scope: String,
+    pub agent: String,
 }
 
 pub enum InstallResult {
@@ -241,11 +243,29 @@ pub fn run_install_picker() -> InstallResult {
     let repo = full_path[..last_slash].to_string();
     let skill = full_path[last_slash + 1..].to_string();
 
+    let scope = prompt_scope();
+
     InstallResult::Selected(InstallSelection {
         repo,
         skill,
         source,
+        scope,
+        agent: "claude-code".to_string(),
     })
+}
+
+fn prompt_scope() -> String {
+    use std::io::Write;
+
+    eprint!("Scope: [u]ser / [p]roject (default: user): ");
+    let _ = std::io::stderr().flush();
+
+    let mut input = String::new();
+    if std::io::stdin().read_line(&mut input).is_ok() && input.trim().eq_ignore_ascii_case("p") {
+        "project".to_string()
+    } else {
+        "user".to_string()
+    }
 }
 
 pub fn run_file_browser(skill: &Skill) -> Option<FileAction> {
