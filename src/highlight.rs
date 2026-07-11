@@ -23,30 +23,29 @@ pub fn highlight_matches(text: &str, query: &str) -> String {
 }
 
 #[cfg(test)]
-#[allow(non_snake_case)]
 mod tests {
     use super::*;
 
     #[test]
-    fn マッチ箇所がANSIカラーでハイライトされる() {
+    fn highlights_match_with_ansi_color() {
         let result = highlight_matches("Hello World", "world");
         assert!(result.contains("\x1b[1;33mWorld\x1b[0m"));
     }
 
     #[test]
-    fn 大文字小文字を区別せずにマッチする() {
+    fn matches_case_insensitively() {
         let result = highlight_matches("Testing テスト", "testing");
         assert!(result.contains("\x1b[1;33mTesting\x1b[0m"));
     }
 
     #[test]
-    fn マッチしない行はそのまま返す() {
+    fn returns_unmatched_lines_unchanged() {
         let result = highlight_matches("no match here", "xyz");
         assert_eq!(result, "no match here\n");
     }
 
     #[test]
-    fn 複数行でそれぞれマッチする() {
+    fn highlights_each_matching_line() {
         let text = "first test\nsecond test\nno match";
         let result = highlight_matches(text, "test");
         let lines: Vec<&str> = result.lines().collect();
@@ -56,13 +55,13 @@ mod tests {
     }
 
     #[test]
-    fn 空のクエリでは入力がそのまま返る() {
+    fn empty_query_returns_input_unchanged() {
         let result = highlight_matches("Hello", "");
         assert!(result.contains("Hello"));
     }
 
     #[test]
-    fn 各行の最初のマッチのみハイライトされる() {
+    fn highlights_only_first_match_per_line() {
         let result = highlight_matches("test test test", "test");
         let highlight_count = result.matches("\x1b[1;33m").count();
         assert_eq!(highlight_count, 1);

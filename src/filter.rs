@@ -38,12 +38,11 @@ impl SourceFilter {
 }
 
 #[cfg(test)]
-#[allow(non_snake_case)]
 mod tests {
     use super::*;
 
     #[test]
-    fn フィルタが正しい順序でサイクルする() {
+    fn cycles_through_filters_in_order() {
         let filter = SourceFilter::All;
         assert_eq!(filter.next(), SourceFilter::GhSkill);
         assert_eq!(filter.next().next(), SourceFilter::NpxSkills);
@@ -52,7 +51,7 @@ mod tests {
     }
 
     #[test]
-    fn 各フィルタのラベルが正しい() {
+    fn labels_are_correct() {
         assert_eq!(SourceFilter::All.label(), "all");
         assert_eq!(SourceFilter::GhSkill.label(), "gh");
         assert_eq!(SourceFilter::NpxSkills.label(), "npx");
@@ -60,7 +59,7 @@ mod tests {
     }
 
     #[test]
-    fn allフィルタは全ソースタイプにマッチする() {
+    fn all_filter_matches_every_source() {
         let all = SourceFilter::All;
         assert!(all.matches(&SourceType::GhSkill));
         assert!(all.matches(&SourceType::Plugin));
@@ -69,7 +68,7 @@ mod tests {
     }
 
     #[test]
-    fn ghフィルタはghスキルのみマッチする() {
+    fn gh_filter_matches_only_gh_skill() {
         let gh = SourceFilter::GhSkill;
         assert!(gh.matches(&SourceType::GhSkill));
         assert!(!gh.matches(&SourceType::NpxSkills));
@@ -78,7 +77,7 @@ mod tests {
     }
 
     #[test]
-    fn npxフィルタはnpxスキルのみマッチする() {
+    fn npx_filter_matches_only_npx_skills() {
         let npx = SourceFilter::NpxSkills;
         assert!(npx.matches(&SourceType::NpxSkills));
         assert!(!npx.matches(&SourceType::GhSkill));
@@ -86,7 +85,7 @@ mod tests {
     }
 
     #[test]
-    fn localフィルタはローカルスキルのみマッチする() {
+    fn local_filter_matches_only_local() {
         let local = SourceFilter::LocalOnly;
         assert!(local.matches(&SourceType::LocalOnly));
         assert!(!local.matches(&SourceType::GhSkill));

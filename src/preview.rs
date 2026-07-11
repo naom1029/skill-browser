@@ -47,7 +47,6 @@ pub fn render_preview(skill: &Skill) -> String {
 }
 
 #[cfg(test)]
-#[allow(non_snake_case)]
 mod tests {
     use super::*;
     use crate::model::{Scope, SourceType};
@@ -115,7 +114,7 @@ mod tests {
     }
 
     #[test]
-    fn スクリプトなしピン留めなしの場合メタ行にnoが表示される() {
+    fn shows_no_for_scripts_and_pinned_when_absent() {
         let tmp = tempfile::tempdir().unwrap();
         let skill_dir = tmp.path().join("s");
         fs::create_dir_all(&skill_dir).unwrap();
@@ -145,7 +144,7 @@ mod tests {
     }
 
     #[test]
-    fn ピン留めありバージョンなしの場合yesのみ表示される() {
+    fn shows_pinned_yes_without_version() {
         let tmp = tempfile::tempdir().unwrap();
         let skill_dir = tmp.path().join("s");
         fs::create_dir_all(&skill_dir).unwrap();
@@ -174,7 +173,7 @@ mod tests {
     }
 
     #[test]
-    fn 複数エージェントがカンマ区切りで表示される() {
+    fn shows_multiple_agents_comma_separated() {
         let tmp = tempfile::tempdir().unwrap();
         let skill_dir = tmp.path().join("s");
         fs::create_dir_all(&skill_dir).unwrap();
