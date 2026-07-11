@@ -387,63 +387,20 @@ fn run_preview_remote(repo: &str, skill: &str) {
         return;
     }
 
-    // Prefetch nearby items (±5) in background
+    // Prefetch nearby items in background
     prefetch_nearby(&dir, repo, skill);
 
-    // Cache miss → show description from metadata while fetching
-    let meta_file = dir.join("results.json");
-    if let Ok(meta_str) = std::fs::read_to_string(&meta_file)
-        && let Ok(items) = serde_json::from_str::<Vec<serde_json::Value>>(&meta_str)
-        && let Some(item) = items.iter().find(|i| {
-            i.get("repo").and_then(|v| v.as_str()) == Some(repo)
-                && i.get("name").and_then(|v| v.as_str()) == Some(skill)
-        })
-    {
-        let desc = item
-            .get("description")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        let source = item.get("source").and_then(|v| v.as_str()).unwrap_or("");
-        let stars = item.get("stars").and_then(|v| v.as_u64());
-
-        println!("── {repo}/{skill} ──");
-        println!();
-        if !desc.is_empty() {
-            println!("{desc}");
-            println!();
-        }
-        let mut info = format!("Source: [{source}]");
-        if let Some(s) = stars {
-            info.push_str(&format!("  ★{s}"));
-        }
-        println!("{info}");
-        println!();
-        println!("Loading full SKILL.md...");
-    }
-
-    // Fetch (may already be in progress via prefetch, wait for it)
-    for _ in 0..20 {
-        if let Ok(cached) = std::fs::read_to_string(&cache_file) {
-            println!();
-            print!("{cached}");
-            return;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(250));
-    }
-
-    // Prefetch didn't finish, fetch directly
+    // Fetch full preview (skim kills this process on cursor move)
     let output = std::process::Command::new("gh")
         .args(["skill", "preview", repo, skill])
         .output();
 
-    match output {
-        Ok(out) if out.status.success() => {
+    if let Ok(out) = output {
+        if out.status.success() {
             let content = String::from_utf8_lossy(&out.stdout);
             let _ = std::fs::write(&cache_file, content.as_bytes());
-            println!();
             print!("{content}");
         }
-        _ => {}
     }
 }
 
