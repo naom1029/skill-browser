@@ -420,31 +420,6 @@ fn run_preview_remote(repo: &str, skill: &str) {
         println!();
         println!("Loading full SKILL.md...");
     }
-
-    // Fetch (may already be in progress via prefetch, wait for it)
-    for _ in 0..20 {
-        if let Ok(cached) = std::fs::read_to_string(&cache_file) {
-            println!();
-            print!("{cached}");
-            return;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(250));
-    }
-
-    // Prefetch didn't finish, fetch directly
-    let output = std::process::Command::new("gh")
-        .args(["skill", "preview", repo, skill])
-        .output();
-
-    match output {
-        Ok(out) if out.status.success() => {
-            let content = String::from_utf8_lossy(&out.stdout);
-            let _ = std::fs::write(&cache_file, content.as_bytes());
-            println!();
-            print!("{content}");
-        }
-        _ => {}
-    }
 }
 
 fn run_grep(query: &str, project: Option<std::path::PathBuf>) {

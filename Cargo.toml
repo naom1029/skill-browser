@@ -1,6 +1,6 @@
 [package]
 name = "skill-browser"
-version = "0.3.1"
+version = "0.3.0"
 edition = "2024"
 description = "A TUI for browsing, searching, and managing AI agent skills"
 license = "MIT"
